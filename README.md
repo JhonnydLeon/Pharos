@@ -33,24 +33,7 @@ Pega el link, elige la calidad y descarga — sin comandos.
 ## Interfaz
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ ⚡ PHAROS  v1.0.0            [Pantalla completa] [Min]  │  ← barra roja
-├─────────────────────────────────────────────────────────┤
-│ 🔗 Link del video:                                      │
-│ [                                                     ] │
-│                                                         │
-│ Calidad: [1080p ▾]   Guardar en: [~/Downloads] [Elegir]│
-│                                                         │
-│ ┌──────────────┐  Título del video                      │
-│ │  ▶ preview  │  Canal • Duración                       │
-│ │   (canvas)  │  [▶ Vista previa]                       │
-│ └──────────────┘                                        │
-│ [████████████████░░░░░░░░] barra progreso               │
-│                                                         │
-│ [⬇ Descargar]  [Registros]  [Actualizaciones]  [⚙]    │
-├─────────────────────────────────────────────────────────┤
-│ Pharos listo.                            Pharos v1.0.0  │
-└─────────────────────────────────────────────────────────┘
+![Pantalla de inicio](assets/main.png)
 ```
 
 ---

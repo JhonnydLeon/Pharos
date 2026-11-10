@@ -1,0 +1,1 @@
+"""Pharos – Video Downloader package."""
