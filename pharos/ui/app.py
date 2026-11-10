@@ -26,6 +26,7 @@ from pharos.i18n import LANGUAGE_DISPLAY, LANGUAGE_NAMES, Translator
 from pharos.settings import SettingsManager
 from pharos.updater import Updater
 from pharos.ui.dialog import ask_yes_no, show_info, show_warning
+from pharos.ui.dropdown import DropdownButton
 from pharos.ui.log_window import LogWindow
 from pharos.ui.settings_window import SettingsWindow
 from pharos.ui.styles import ThemeManager
