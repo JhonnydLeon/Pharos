@@ -45,14 +45,6 @@ Pega el link, elige la calidad y descarga — sin comandos.
 
 
 
-https://github.com/user-attachments/assets/f1f9bdf0-5df5-48e1-b2b0-5a9e4e9d391a
-
-
-
-
-
-
-
 ---
 
 ## 🏗 Estructura del proyecto
