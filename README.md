@@ -48,10 +48,6 @@ https://github.com/user-attachments/assets/6cf4ff37-8f6d-446d-ae24-3bb5ac3f2077
 
 
 
-<p align="center">
-  <img src="assets/demo.gif" alt="Pharos en acción" width="700"/>   ← TU GIF aquí
-</p>
-
 
 ---
 
