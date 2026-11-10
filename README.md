@@ -1,7 +1,3 @@
-
-
-
-
 # ⚡ Pharos – Video Downloader
 
 <p align="center">
@@ -41,7 +37,11 @@ Pega el link, elige la calidad y descarga — sin comandos.
 
 <img width="1920" height="1080" alt="main" src="https://github.com/user-attachments/assets/106b8367-40d4-4c5e-b81a-efee3b940876" />
 
-https://github.com/user-attachments/assets/039d31f1-20b0-4ab7-b291-f00f62bb0a3b
+
+
+https://github.com/user-attachments/assets/161454fd-ea7f-4940-ade2-3726a7e982ed
+
+
 
 
 
