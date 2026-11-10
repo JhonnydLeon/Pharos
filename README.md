@@ -35,15 +35,13 @@ Pega el link, elige la calidad y descarga — sin comandos.
 
 ## 🖼 Interfaz
 
-<p align="center">
-  <img src="assets/demo.png" alt="Pharos en acción" width="700"/>
-</p>
-
-<p align="center">
-  <img src="assets/demo.mp4" alt="Pantalla principal de Pharos" width="700"/>
-</p>
 
 
+
+
+<img width="1920" height="1080" alt="main" src="https://github.com/user-attachments/assets/106b8367-40d4-4c5e-b81a-efee3b940876" />
+
+https://github.com/user-attachments/assets/039d31f1-20b0-4ab7-b291-f00f62bb0a3b
 
 
 
