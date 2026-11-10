@@ -34,7 +34,7 @@ Pega el link, elige la calidad y descarga — sin comandos.
 <p align="center">
   <img src="assets/demo.gif" alt="Pharos en acción" width="700"/>
 </p>
-
+https://github.com/user-attachments/assets/98b46df0-7245-42fc-9501-72c2db71c056
 <p align="center">
   <img src="assets/main.png" alt="Pantalla principal de Pharos" width="700"/>
 </p>
