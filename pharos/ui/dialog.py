@@ -3,14 +3,11 @@ ui/dialog.py
 ============
 Diálogos modernos de Pharos que reemplazan a tkinter.messagebox.
 
-Características:
-  - Sin icono de tkinter (overrideredirect + chrome propio)
-  - Colores y tipografía de la app (rojo/negro)
-  - Arrastrable desde la barra de título
-  - Soporta botones personalizados y devuelve el resultado
-
-Principio SOLID:
-  S – Solo construye y gestiona diálogos modales.
+FIX v1.1.1:
+  - grab_set() / focus_force() ahora se llaman DESPUÉS de que la ventana
+    está construida y visible (antes causaba freeze al buscar actualizaciones).
+  - Se elimina transient() que conflictuaba con overrideredirect en Windows.
+  - Se agrega -topmost y lift() para garantizar visibilidad.
 """
 
 import tkinter as tk
@@ -21,23 +18,21 @@ from pharos.constants import APP_NAME, COLORS as C, VERSION
 
 class PharosDialog(tk.Toplevel):
     """
-    Diálogo modal base con estética Pharos (sin chrome de tkinter).
+    Diálogo modal con estética Pharos (sin chrome de tkinter).
 
-    Parámetros:
-        parent   : ventana padre.
-        title    : texto de la barra de título del diálogo.
-        message  : mensaje principal.
-        submsg   : texto secundario (más pequeño, opcional).
-        buttons  : lista de (etiqueta, valor_de_retorno).
-                   El último botón se trata como acción primaria (rojo).
-        icon     : emoji que se muestra a la izquierda del mensaje.
+    El flujo correcto es:
+      1. Construir widgets  (_build)
+      2. Forzar render      (update)
+      3. Centrar            (_center)
+      4. Colocar encima     (lift / -topmost)
+      5. Capturar eventos   (grab_set / focus_force)
     """
 
     def __init__(
         self,
         parent: tk.Tk,
         title: str,
-        message: str,
+        message: str = "",
         submsg: str = "",
         buttons: Optional[list[tuple[str, Any]]] = None,
         icon: str = "",
@@ -45,22 +40,29 @@ class PharosDialog(tk.Toplevel):
         super().__init__(parent)
         self.result: Any = None
         self._buttons_cfg = buttons or [("OK", True)]
+        self._drag_x = self._drag_y = 0
 
-        # Sin decoración de sistema operativo
+        # Sin decoración del SO
         self.overrideredirect(True)
         self.configure(bg=C["bg"])
         self.resizable(False, False)
 
-        # Siempre encima y modal
-        self.transient(parent)
-        self.grab_set()
-        self.focus_force()
-
+        # 1. Construir la UI primero
         self._build(title, message, submsg, icon)
+
+        # 2. Forzar que la ventana se renderice antes de medir/mover
+        self.update()
+
+        # 3. Centrar sobre el padre
         self._center(parent)
 
-        # Permitir arrastrar desde la barra de título
-        self._drag_x = self._drag_y = 0
+        # 4. Garantizar visibilidad
+        self.lift()
+        self.attributes("-topmost", True)
+
+        # 5. AHORA sí capturar eventos (en este orden)
+        self.grab_set()
+        self.focus_force()
 
     # ── Construcción ──────────────────────────────────────────────────────────
     def _build(self, title: str, message: str, submsg: str, icon: str) -> None:
@@ -68,8 +70,8 @@ class PharosDialog(tk.Toplevel):
         titlebar = tk.Frame(self, bg=C["accent"], height=38)
         titlebar.pack(fill="x")
         titlebar.pack_propagate(False)
-        titlebar.bind("<ButtonPress-1>",   self._drag_start)
-        titlebar.bind("<B1-Motion>",       self._drag_move)
+        titlebar.bind("<ButtonPress-1>", self._drag_start)
+        titlebar.bind("<B1-Motion>",     self._drag_move)
 
         tk.Label(
             titlebar, text=f"⚡ {APP_NAME}",
@@ -86,15 +88,15 @@ class PharosDialog(tk.Toplevel):
         # Separador
         tk.Frame(self, bg=C["border"], height=1).pack(fill="x")
 
-        # Cuerpo del mensaje
-        body = tk.Frame(self, bg=C["bg"], padx=24, pady=20)
+        # Cuerpo
+        body = tk.Frame(self, bg=C["bg"], padx=28, pady=20)
         body.pack(fill="both", expand=True)
 
         if icon:
             tk.Label(
                 body, text=icon,
                 bg=C["bg"], fg=C["text"],
-                font=("Segoe UI", 28),
+                font=("Segoe UI", 30),
             ).pack(pady=(0, 10))
 
         tk.Label(
@@ -129,11 +131,11 @@ class PharosDialog(tk.Toplevel):
 
         for i, (label, value) in enumerate(self._buttons_cfg):
             is_primary = (i == len(self._buttons_cfg) - 1)
-            btn = tk.Button(
+            tk.Button(
                 btn_row,
                 text=label,
-                bg=C["accent"] if is_primary else C["surface"],
-                fg="white" if is_primary else C["text_dim"],
+                bg=C["accent"]  if is_primary else C["surface"],
+                fg="white"      if is_primary else C["text_dim"],
                 activebackground=C["accent_hover"] if is_primary else C["surface2"],
                 activeforeground="white",
                 relief="flat", bd=0,
@@ -141,8 +143,7 @@ class PharosDialog(tk.Toplevel):
                 font=("Segoe UI", 10, "bold" if is_primary else "normal"),
                 cursor="hand2",
                 command=lambda v=value: self._close(v),
-            )
-            btn.pack(side="right", padx=(0 if i else 8, 8))
+            ).pack(side="right", padx=(0 if i else 8, 8))
 
     # ── Arrastre ──────────────────────────────────────────────────────────────
     def _drag_start(self, event: tk.Event) -> None:
@@ -160,10 +161,10 @@ class PharosDialog(tk.Toplevel):
         self.grab_release()
         self.destroy()
 
+    # ── Centrado ──────────────────────────────────────────────────────────────
     def _center(self, parent: tk.Tk) -> None:
-        """Centra el diálogo sobre la ventana padre."""
-        self.update_idletasks()
-        w, h = self.winfo_width(), self.winfo_height()
+        w = self.winfo_width()
+        h = self.winfo_height()
         px = parent.winfo_x() + (parent.winfo_width()  - w) // 2
         py = parent.winfo_y() + (parent.winfo_height() - h) // 2
         self.geometry(f"+{max(px, 0)}+{max(py, 0)}")
@@ -179,7 +180,7 @@ def show_info(
     icon: str = "✅",
     ok_label: str = "OK",
 ) -> None:
-    """Diálogo informativo con un botón OK."""
+    """Diálogo informativo (un solo botón OK). Bloquea hasta que se cierra."""
     d = PharosDialog(
         parent, title, message, submsg,
         buttons=[(ok_label, True)],
@@ -209,10 +210,8 @@ def ask_yes_no(
     no_label: str = "No",
 ) -> bool:
     """
-    Diálogo de pregunta Sí/No.
-
-    Returns:
-        True si el usuario pulsó el botón primario (Sí / acción positiva).
+    Diálogo Sí / No.
+    Returns True si el usuario pulsó el botón primario.
     """
     d = PharosDialog(
         parent, title, message, submsg,
