@@ -106,3 +106,4 @@ class SettingsWindow(tk.Toplevel):
         self._settings.save()
         self._on_save(new_lang)
         self.destroy()
+

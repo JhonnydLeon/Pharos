@@ -129,3 +129,4 @@ class Translator:
         """Traduce una clave, con soporte de interpolación de variables."""
         text = self._table.get(key, key)
         return text.format(**kwargs) if kwargs else text
+

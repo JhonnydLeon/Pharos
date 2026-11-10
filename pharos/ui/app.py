@@ -520,3 +520,4 @@ class App:
         self._cb_quality["values"] = [self._t(k) for k in QUALITY_FLAGS]
         self._cb_quality.current(idx)
         self._draw_placeholder()
+

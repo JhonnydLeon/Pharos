@@ -41,3 +41,4 @@ COLORS: dict[str, str] = {
     "warning":      "#ffaa22",
     "error":        "#ff4444",
 }
+

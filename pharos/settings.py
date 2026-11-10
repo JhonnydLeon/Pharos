@@ -74,3 +74,4 @@ class SettingsManager:
             self._data.update(loaded)
         except (FileNotFoundError, json.JSONDecodeError):
             pass  # Usa valores por defecto si el archivo no existe o está corrupto
+

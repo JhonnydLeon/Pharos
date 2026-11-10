@@ -119,3 +119,4 @@ class Updater:
             except ValueError:
                 return (0,)
         return to_tuple(remote) > to_tuple(local)
+

@@ -92,3 +92,4 @@ class ThemeManager:
             darkcolor=C["accent_dark"],
             lightcolor=C["accent_hover"],
         )
+

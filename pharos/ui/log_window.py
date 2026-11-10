@@ -83,3 +83,4 @@ class LogWindow(tk.Toplevel):
             relief="flat", bd=0, padx=10, pady=4,
             command=self.clear,
         ).pack(pady=4)
+

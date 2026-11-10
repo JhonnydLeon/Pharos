@@ -52,7 +52,7 @@ Pega el link, elige la calidad y descarga — sin comandos.
 ### 1. Clona el repositorio
 
 ```bash
-git clone https://github.com/TU_USUARIO/Pharos.git
+git clone https://github.com/JhonnydLeon/Pharos.git
 cd Pharos
 ```
 
@@ -106,7 +106,7 @@ Pharos puede verificar si hay una nueva versión disponible en GitHub de dos for
 
 > **Nota:** Para que las actualizaciones funcionen, edita la variable `GITHUB_REPO` en `descargador.py` con tu usuario y repositorio reales:
 > ```python
-> GITHUB_REPO = "TU_USUARIO/Pharos"
+> GITHUB_REPO = "JhonnydLeon/Pharos"
 > ```
 
 ---
