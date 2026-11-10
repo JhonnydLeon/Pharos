@@ -13,7 +13,7 @@ Pega el link, elige la calidad y descarga — sin comandos.
 
 ---
 
-## ✨ Características
+## Características
 
 | Función | Descripción |
 |---|---|
@@ -30,7 +30,7 @@ Pega el link, elige la calidad y descarga — sin comandos.
 
 ---
 
-## 📸 Interfaz
+## Interfaz
 
 ```
 ┌─────────────────────────────────────────────────────────┐
