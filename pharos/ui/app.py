@@ -3,11 +3,12 @@ ui/app.py
 =========
 Ventana principal de Pharos. Orquesta todos los módulos.
 
-Principios SOLID aplicados:
-  S – Single Responsibility: coordina la UI; no contiene lógica de
-      descarga, actualización ni persistencia (cada una está en su módulo).
-  D – Dependency Inversion: recibe Downloader, Updater, Translator y
-      SettingsManager ya construidos; solo los usa.
+Cambios v1.1:
+  - Selector de idioma (combobox) visible en la barra superior
+  - Vista previa: abre video en VLC/reproductor del sistema, con
+    fallback al navegador
+  - Diálogos de actualización modernos (PharosDialog, sin icono tkinter)
+  - 5 idiomas: es, en, pt, fr, de
 """
 
 import os
@@ -16,23 +17,41 @@ import threading
 import tkinter as tk
 import urllib.request
 import webbrowser
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 from typing import Optional
 
 from pharos.constants import COLORS as C, QUALITY_FLAGS, VERSION
 from pharos.downloader import Downloader
-from pharos.i18n import Translator
+from pharos.i18n import LANGUAGE_DISPLAY, LANGUAGE_NAMES, Translator
 from pharos.settings import SettingsManager
 from pharos.updater import Updater
+from pharos.ui.dialog import ask_yes_no, show_info, show_warning
 from pharos.ui.log_window import LogWindow
 from pharos.ui.settings_window import SettingsWindow
 from pharos.ui.styles import ThemeManager
+
+# Rutas comunes de VLC en Windows
+_VLC_PATHS = [
+    r"C:\Program Files\VideoLAN\VLC\vlc.exe",
+    r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
+]
+
+
+def _find_vlc() -> Optional[str]:
+    """Devuelve la ruta a VLC si está instalado, o None."""
+    for path in _VLC_PATHS:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def _base_dir() -> str:
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class App:
     """
     Ventana principal de Pharos.
-
     Recibe todas las dependencias por constructor (Dependency Injection).
     """
 
@@ -48,33 +67,24 @@ class App:
         self._log_win: Optional[LogWindow] = None
         self._is_fullscreen = False
 
-        # Variables de UI
-        self._save_dir  = tk.StringVar(
+        self._save_dir = tk.StringVar(
             value=os.path.join(os.path.expanduser("~"), "Downloads")
         )
-        self._status    = tk.StringVar(value=self._t("status_ready"))
-        self._quality_idx = 0   # índice en QUALITY_FLAGS
+        self._status = tk.StringVar(value=self._t("status_ready"))
 
-        # Aplicar tema visual
         ThemeManager(root).apply()
-
-        # Construir interfaz
         self._build_ui()
 
-        # Crear Downloader inyectando callbacks de esta UI
         self._downloader = Downloader(
             on_line=self._on_download_line,
             on_done=self._on_download_done,
         )
-
-        # Crear Updater inyectando callbacks de esta UI
         self._updater = Updater(
             on_update_found=self._on_update_found,
             on_no_update=self._on_no_update,
             on_error=self._on_update_error,
         )
 
-        # Verificación de actualizaciones al arrancar
         if self._settings.get("check_updates_on_startup", True):
             self._updater.check(startup=True)
 
@@ -83,16 +93,15 @@ class App:
     # ══════════════════════════════════════════════════════════════════════════
     def _build_ui(self) -> None:
         self._root.title(self._t("title"))
-        self._root.geometry("780x580")
-        self._root.minsize(640, 480)
+        self._root.geometry("800x600")
+        self._root.minsize(640, 500)
         self._root.resizable(True, True)
 
         self._build_topbar()
         self._build_body()
         self._build_statusbar()
 
-        # Atajos de teclado
-        self._root.bind("<F11>",  lambda _: self.toggle_fullscreen())
+        self._root.bind("<F11>",    lambda _: self.toggle_fullscreen())
         self._root.bind("<Escape>", lambda _: self._exit_fullscreen())
 
     # ── Barra superior ────────────────────────────────────────────────────────
@@ -101,30 +110,50 @@ class App:
         bar.pack(fill="x")
         bar.pack_propagate(False)
 
+        # Logo + versión
         tk.Label(
-            bar, text=f"⚡ {VERSION and 'PHAROS'}",
+            bar, text="⚡ PHAROS",
             bg=C["accent"], fg="white",
             font=("Segoe UI Black", 14, "bold"),
         ).pack(side="left", padx=16)
-
         tk.Label(
             bar, text=f"v{VERSION}",
             bg=C["accent"], fg="#ffcccc",
             font=("Segoe UI", 9),
         ).pack(side="left")
 
-        # Controles derecha
+        # Controles derecha: Minimizar + Pantalla completa
         ctrl = tk.Frame(bar, bg=C["accent"])
         ctrl.pack(side="right", padx=6)
-
-        self._btn_minimize = self._make_bar_btn(
-            ctrl, "minimize", self._root.iconify
-        )
-        self._btn_fullscreen = self._make_bar_btn(
-            ctrl, "fullscreen", self.toggle_fullscreen
-        )
+        self._btn_minimize    = self._make_bar_btn(ctrl, "minimize",   self._root.iconify)
+        self._btn_fullscreen  = self._make_bar_btn(ctrl, "fullscreen", self.toggle_fullscreen)
         self._btn_minimize.pack(side="left",   padx=2)
         self._btn_fullscreen.pack(side="left", padx=2)
+
+        # Selector de idioma (centro-derecha)
+        lang_frame = tk.Frame(bar, bg=C["accent"])
+        lang_frame.pack(side="right", padx=12)
+
+        tk.Label(
+            lang_frame, text=self._t("language"),
+            bg=C["accent"], fg="#ffcccc",
+            font=("Segoe UI", 9),
+        ).pack(side="left", padx=(0, 4))
+
+        display_names = list(LANGUAGE_NAMES.keys())   # ["Español","English",...]
+        current_display = LANGUAGE_DISPLAY.get(self._t.language, "Español")
+
+        self._lang_var = tk.StringVar(value=current_display)
+        self._cb_lang = ttk.Combobox(
+            lang_frame,
+            textvariable=self._lang_var,
+            values=display_names,
+            state="readonly",
+            width=10,
+            font=("Segoe UI", 9),
+        )
+        self._cb_lang.pack(side="left")
+        self._cb_lang.bind("<<ComboboxSelected>>", self._on_language_changed)
 
     def _make_bar_btn(self, parent, key: str, cmd) -> tk.Button:
         return tk.Button(
@@ -140,7 +169,6 @@ class App:
     def _build_body(self) -> None:
         body = tk.Frame(self._root, bg=C["bg"])
         body.pack(fill="both", expand=True, padx=20, pady=16)
-
         self._build_link_row(body)
         self._build_quality_row(body)
         self._build_preview_panel(body)
@@ -170,17 +198,14 @@ class App:
         row = tk.Frame(parent, bg=C["bg"])
         row.pack(fill="x", pady=(0, 12))
 
-        # Calidad
         col_q = tk.Frame(row, bg=C["bg"])
         col_q.pack(side="left", fill="x", expand=True, padx=(0, 10))
-
         self._lbl_quality = tk.Label(
             col_q, text=self._t("quality"),
             bg=C["bg"], fg=C["text_dim"],
             font=("Segoe UI", 9, "bold"),
         )
         self._lbl_quality.pack(anchor="w")
-
         self._cb_quality = ttk.Combobox(
             col_q,
             values=[self._t(k) for k in QUALITY_FLAGS],
@@ -190,20 +215,16 @@ class App:
         self._cb_quality.current(0)
         self._cb_quality.pack(anchor="w", pady=(4, 0))
 
-        # Guardar en
         col_s = tk.Frame(row, bg=C["bg"])
         col_s.pack(side="left", fill="x", expand=True)
-
         self._lbl_save = tk.Label(
             col_s, text=self._t("save_in"),
             bg=C["bg"], fg=C["text_dim"],
             font=("Segoe UI", 9, "bold"),
         )
         self._lbl_save.pack(anchor="w")
-
         row_save = tk.Frame(col_s, bg=C["bg"])
         row_save.pack(fill="x", pady=(4, 0))
-
         tk.Entry(
             row_save, textvariable=self._save_dir,
             bg=C["surface2"], fg=C["text"],
@@ -211,7 +232,6 @@ class App:
             relief="flat", bd=6,
             font=("Segoe UI", 10),
         ).pack(side="left", fill="x", expand=True)
-
         self._btn_choose = tk.Button(
             row_save, text=self._t("choose"),
             bg=C["surface2"], fg=C["text_dim"],
@@ -226,15 +246,13 @@ class App:
         frame = tk.Frame(parent, bg=C["surface"])
         frame.pack(fill="x", pady=(0, 14))
 
-        # Canvas miniatura
         self._canvas = tk.Canvas(
             frame, bg=C["surface"],
-            width=320, height=180, highlightthickness=0,
+            width=300, height=168, highlightthickness=0,
         )
         self._canvas.pack(side="left", padx=12, pady=12)
         self._draw_placeholder()
 
-        # Info derecha
         info = tk.Frame(frame, bg=C["surface"])
         info.pack(side="left", fill="both", expand=True, pady=12, padx=(0, 12))
 
@@ -254,15 +272,30 @@ class App:
         )
         self._lbl_meta.pack(anchor="w", pady=(4, 0))
 
-        self._btn_preview = tk.Button(
-            info, text=self._t("preview"),
-            bg=C["surface2"], fg=C["text_dim"],
-            activebackground=C["accent_dark"], activeforeground="white",
-            relief="flat", bd=0, padx=14, pady=6,
-            font=("Segoe UI", 9),
-            command=self._open_preview,
+        # Dos botones de preview: reproductor y navegador
+        btn_row = tk.Frame(info, bg=C["surface"])
+        btn_row.pack(anchor="w", pady=(10, 0))
+
+        self._btn_play = tk.Button(
+            btn_row, text=self._t("open_in_player"),
+            bg=C["accent"], fg="white",
+            activebackground=C["accent_hover"], activeforeground="white",
+            relief="flat", bd=0, padx=12, pady=6,
+            font=("Segoe UI", 9, "bold"),
+            cursor="hand2",
+            command=self._open_in_player,
         )
-        self._btn_preview.pack(anchor="w", pady=(10, 0))
+        self._btn_play.pack(side="left", padx=(0, 6))
+
+        self._btn_browser = tk.Button(
+            btn_row, text=self._t("open_in_browser"),
+            bg=C["surface2"], fg=C["text_dim"],
+            activebackground=C["surface"], activeforeground=C["text"],
+            relief="flat", bd=0, padx=12, pady=6,
+            font=("Segoe UI", 9),
+            command=self._open_in_browser,
+        )
+        self._btn_browser.pack(side="left")
 
     def _build_progress(self, parent: tk.Frame) -> None:
         self._progress = ttk.Progressbar(
@@ -285,16 +318,14 @@ class App:
         )
         self._btn_download.pack(side="left", padx=(0, 10))
 
-        self._btn_logs = self._make_secondary_btn(row, "logs",    self._open_logs)
-        self._btn_logs.pack(side="left", padx=(0, 6))
-
-        self._btn_updates = self._make_secondary_btn(row, "check_updates", self._manual_update)
+        self._btn_logs    = self._make_sec_btn(row, "logs",          self._open_logs)
+        self._btn_updates = self._make_sec_btn(row, "check_updates", self._manual_update)
+        self._btn_settings = self._make_sec_btn(row, "settings",     self._open_settings)
+        self._btn_logs.pack(side="left",    padx=(0, 6))
         self._btn_updates.pack(side="left", padx=(0, 6))
-
-        self._btn_settings = self._make_secondary_btn(row, "settings", self._open_settings)
         self._btn_settings.pack(side="right")
 
-    def _make_secondary_btn(self, parent, key: str, cmd) -> tk.Button:
+    def _make_sec_btn(self, parent, key: str, cmd) -> tk.Button:
         return tk.Button(
             parent, text=self._t(key),
             bg=C["surface2"], fg=C["text_dim"],
@@ -309,13 +340,11 @@ class App:
         bar = tk.Frame(self._root, bg=C["surface2"], height=24)
         bar.pack(fill="x", side="bottom")
         bar.pack_propagate(False)
-
         tk.Label(
             bar, textvariable=self._status,
             bg=C["surface2"], fg=C["text_dim"],
             font=("Segoe UI", 8), anchor="w",
         ).pack(side="left", padx=10, fill="y")
-
         tk.Label(
             bar, text=f"Pharos v{VERSION}",
             bg=C["surface2"], fg=C["text_dim"],
@@ -357,11 +386,52 @@ class App:
             self._root.attributes("-fullscreen", False)
             self._btn_fullscreen.configure(text=self._t("fullscreen"))
 
+    # ── Selector de idioma (topbar) ───────────────────────────────────────────
+    def _on_language_changed(self, _event=None) -> None:
+        display = self._lang_var.get()
+        lang_code = LANGUAGE_NAMES.get(display, "es")
+        self._settings["language"] = lang_code
+        self._settings.save()
+        self._apply_language(lang_code)
+
     # ── Vista previa ──────────────────────────────────────────────────────────
-    def _open_preview(self) -> None:
+    def _get_url(self) -> Optional[str]:
         url = self._entry_url.get().strip()
         if not url:
-            messagebox.showwarning(self._t("no_link_title"), self._t("no_link"))
+            show_warning(
+                self._root,
+                self._t("no_link_title"),
+                self._t("no_link"),
+                ok_label=self._t("ok"),
+            )
+        return url or None
+
+    def _open_in_player(self) -> None:
+        """
+        Intenta abrir el video en VLC (si está instalado).
+        VLC acepta URLs de YouTube directamente.
+        Si no hay VLC, abre en el navegador.
+        """
+        url = self._get_url()
+        if not url:
+            return
+        # Cargar metadatos en background también
+        self._draw_placeholder()
+        self._lbl_title.configure(text=self._t("preview_loading"))
+        self._lbl_meta.configure(text="")
+        threading.Thread(target=self._fetch_meta, args=(url,), daemon=True).start()
+
+        vlc = _find_vlc()
+        if vlc:
+            subprocess.Popen([vlc, url])
+            self._status.set(self._t("opening_player"))
+        else:
+            webbrowser.open(url)
+            self._status.set(self._t("player_fallback"))
+
+    def _open_in_browser(self) -> None:
+        url = self._get_url()
+        if not url:
             return
         webbrowser.open(url)
         self._draw_placeholder()
@@ -371,8 +441,7 @@ class App:
 
     def _fetch_meta(self, url: str) -> None:
         """Obtiene título, canal, duración y miniatura con yt-dlp."""
-        import sys, os
-        base  = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        base  = _base_dir()
         ytdlp = os.path.join(base, "yt-dlp.exe")
         if not os.path.exists(ytdlp):
             ytdlp = "yt-dlp"
@@ -407,7 +476,7 @@ class App:
             req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=8) as r:
                 img_data = r.read()
-            img   = Image.open(io.BytesIO(img_data)).resize((320, 180), Image.LANCZOS)
+            img   = Image.open(io.BytesIO(img_data)).resize((300, 168), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img)
 
             def _show():
@@ -420,10 +489,10 @@ class App:
 
     def _draw_placeholder(self) -> None:
         self._canvas.delete("all")
-        self._canvas.create_rectangle(0, 0, 320, 180, fill=C["surface2"], outline="")
-        self._canvas.create_polygon(120, 60, 120, 120, 200, 90, fill=C["border"], outline="")
+        self._canvas.create_rectangle(0, 0, 300, 168, fill=C["surface2"], outline="")
+        self._canvas.create_polygon(110, 56, 110, 112, 190, 84, fill=C["border"], outline="")
         self._canvas.create_text(
-            160, 150,
+            150, 140,
             text=self._t("preview_placeholder"),
             fill=C["text_dim"], font=("Segoe UI", 9),
         )
@@ -432,21 +501,20 @@ class App:
     def _start_download(self) -> None:
         url = self._entry_url.get().strip()
         if not url:
-            messagebox.showwarning(self._t("no_link_title"), self._t("no_link"))
+            show_warning(
+                self._root,
+                self._t("no_link_title"),
+                self._t("no_link"),
+                ok_label=self._t("ok"),
+            )
             return
         self._open_logs()
         self._btn_download.configure(state="disabled", bg=C["accent_dark"])
         self._progress.start(12)
-
         q_key = list(QUALITY_FLAGS.keys())[self._cb_quality.current()]
-        self._downloader.start(
-            url=url,
-            quality_key=q_key,
-            save_dir=self._save_dir.get(),
-        )
+        self._downloader.start(url=url, quality_key=q_key, save_dir=self._save_dir.get())
 
     def _on_download_line(self, text: str) -> None:
-        """Callback: recibe cada línea de salida de yt-dlp."""
         line = text.strip().split("\n")[0]
         if line:
             self._root.after(0, self._status.set, line[:120])
@@ -454,7 +522,6 @@ class App:
             self._root.after(0, self._log_win.write, text)
 
     def _on_download_done(self, success: bool) -> None:
-        """Callback: descarga terminó."""
         msg = self._t("done") if success else self._t("error_download")
         self._on_download_line(msg)
 
@@ -465,33 +532,45 @@ class App:
 
         self._root.after(0, _reset)
 
-    # ── Actualizaciones ───────────────────────────────────────────────────────
+    # ── Actualizaciones (diálogos modernos) ───────────────────────────────────
     def _manual_update(self) -> None:
         self._status.set(self._t("update_checking"))
         self._updater.check(startup=False)
 
     def _on_update_found(self, ver: str, url: str) -> None:
         def _ask():
-            msg = self._t("update_found", ver=ver, cur=VERSION)
-            if messagebox.askyesno(self._t("update_title"), msg):
+            confirmed = ask_yes_no(
+                self._root,
+                title=self._t("update_found"),
+                message=self._t("update_found_body", ver=ver, cur=VERSION),
+                icon="🎉",
+                yes_label=self._t("go_to_download"),
+                no_label=self._t("cancel"),
+            )
+            if confirmed:
                 webbrowser.open(url)
             self._status.set(self._t("status_ready"))
         self._root.after(0, _ask)
 
     def _on_no_update(self, ver: str) -> None:
         def _show():
-            messagebox.showinfo(
-                self._t("update_title"),
-                self._t("update_none", ver=ver),
+            show_info(
+                self._root,
+                title=self._t("update_none"),
+                message=self._t("update_none_body", ver=ver),
+                icon="✅",
+                ok_label=self._t("ok"),
             )
             self._status.set(self._t("status_ready"))
         self._root.after(0, _show)
 
     def _on_update_error(self, error: str) -> None:
         def _show():
-            messagebox.showwarning(
-                self._t("update_title"),
-                self._t("update_error", err=error),
+            show_warning(
+                self._root,
+                title=self._t("update_error"),
+                message=self._t("update_error_body", err=error),
+                ok_label=self._t("ok"),
             )
             self._status.set(self._t("status_ready"))
         self._root.after(0, _show)
@@ -508,7 +587,8 @@ class App:
         self._lbl_quality.configure(text=self._t("quality"))
         self._lbl_save.configure(text=self._t("save_in"))
         self._btn_choose.configure(text=self._t("choose"))
-        self._btn_preview.configure(text=self._t("preview"))
+        self._btn_play.configure(text=self._t("open_in_player"))
+        self._btn_browser.configure(text=self._t("open_in_browser"))
         self._btn_download.configure(text=self._t("download"))
         self._btn_logs.configure(text=self._t("logs"))
         self._btn_updates.configure(text=self._t("check_updates"))
@@ -519,5 +599,8 @@ class App:
         idx = self._cb_quality.current()
         self._cb_quality["values"] = [self._t(k) for k in QUALITY_FLAGS]
         self._cb_quality.current(idx)
+        # Combobox idioma: actualizar label pero no cambiar selección
+        from pharos.i18n import LANGUAGE_DISPLAY
+        self._cb_lang["values"] = list(LANGUAGE_NAMES.keys())
+        self._lang_var.set(LANGUAGE_DISPLAY.get(self._t.language, "Español"))
         self._draw_placeholder()
-
