@@ -36,7 +36,7 @@ Pega el link, elige la calidad y descarga — sin comandos.
 ## 🖼 Interfaz
 
 <p align="center">
-  <img src="assets/demo.gif" alt="Pharos en acción" width="700"/>
+  <img src="assets/demo.png" alt="Pharos en acción" width="700"/>
 </p>
 
 <p align="center">
