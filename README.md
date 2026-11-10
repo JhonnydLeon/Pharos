@@ -37,7 +37,11 @@ Pega el link, elige la calidad y descarga — sin comandos.
 
 
 
-https://github.com/user-attachments/assets/23c916e5-54f2-408c-8d02-a95be36093b3
+
+
+https://github.com/user-attachments/assets/190654a4-432d-457c-b73d-f0754d07bc9f
+
+
 
 
 
