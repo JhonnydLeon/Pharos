@@ -29,6 +29,18 @@ Pega el link, elige la calidad y descarga — sin comandos.
 
 ---
 
+## 🖼 Interfaz
+
+<p align="center">
+  <img src="assets/demo.gif" alt="Pharos en acción" width="700"/>
+</p>
+
+<p align="center">
+  <img src="assets/main.png" alt="Pantalla principal de Pharos" width="700"/>
+</p>
+
+---
+
 ## 🏗 Estructura del proyecto
 
 ```
