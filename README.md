@@ -148,8 +148,7 @@ Cambia el idioma en **⚙ Preferencias** — el cambio se aplica de inmediato y 
 
 ## ⚠ Aviso
 
-Usa Pharos únicamente con contenido que tengas derecho a descargar.  
-Este proyecto no está afiliado a yt-dlp, ffmpeg ni YouTube.
+Pharos es una herramienta de uso personal y educativo. Úsala solo con contenido que tengas derecho a descargar: videos propios, con licencia Creative Commons, de dominio público o con autorización de su autor. Descargar contenido de YouTube puede infringir sus Términos de Servicio, y cada usuario es responsable del uso que haga del programa. Este proyecto no está afiliado a yt-dlp, ffmpeg ni YouTube.
 
 ---
 
