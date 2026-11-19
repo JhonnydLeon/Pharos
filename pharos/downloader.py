@@ -52,10 +52,19 @@ class Downloader:
 
     # ── Interfaz pública ──────────────────────────────────────────────────────
     def start(self, url: str, quality_key: str, save_dir: str) -> None:
-        """Lanza la descarga en un hilo demonio."""
+        """Lanza la descarga en un hilo demonio usando una clave de calidad."""
         thread = threading.Thread(
             target=self._run,
             args=(url, quality_key, save_dir),
+            daemon=True,
+        )
+        thread.start()
+
+    def start_with_args(self, url: str, extra_args: list[str], save_dir: str) -> None:
+        """Lanza la descarga con flags arbitrarios (para FormatPanel)."""
+        thread = threading.Thread(
+            target=self._run_with_args,
+            args=(url, extra_args, save_dir),
             daemon=True,
         )
         thread.start()
@@ -65,9 +74,23 @@ class Downloader:
         base  = _base_dir()
         ytdlp = self._find_ytdlp(base)
         cmd   = self._build_command(ytdlp, quality_key, save_dir, base, url)
+        self._execute(cmd)
 
+    def _run_with_args(self, url: str, extra_args: list[str], save_dir: str) -> None:
+        """Ejecuta yt-dlp con flags personalizados (desde FormatPanel)."""
+        base  = _base_dir()
+        ytdlp = self._find_ytdlp(base)
+        cmd   = [ytdlp, *extra_args, "--newline", "--no-playlist",
+                 "-P", save_dir, "-o", "%(title)s.%(ext)s"]
+        ffmpeg_local = os.path.join(base, "ffmpeg.exe")
+        if os.path.exists(ffmpeg_local):
+            cmd += ["--ffmpeg-location", base]
+        cmd.append(url)
+        self._execute(cmd)
+
+    def _execute(self, cmd: list[str]) -> None:
+        """Ejecuta un comando y emite las líneas via callback."""
         self._on_line(f"> {' '.join(cmd)}\n")
-
         try:
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             process = subprocess.Popen(
@@ -83,7 +106,6 @@ class Downloader:
                 self._on_line(line)
             process.wait()
             self._on_done(process.returncode == 0)
-
         except FileNotFoundError:
             self._on_line("\n⚠  yt-dlp no encontrado.\n")
             self._on_done(False)

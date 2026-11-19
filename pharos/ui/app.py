@@ -3,11 +3,15 @@ ui/app.py
 =========
 Ventana principal de Pharos. Orquesta todos los módulos.
 
-Cambios v1.1:
+Cambios v1.2 (Fase 1):
+  - Panel de análisis de video con yt-dlp -J
+  - Selector de modo: Video+Audio / Solo Video / Solo Audio
+  - Comboboxes dinámicos: resolución, FPS, HDR, códec, contenedor,
+    idioma (con detección de doblaje IA), códec audio, calidad audio, DRC
+  - Presets de un clic: Mejor calidad, Más ligero, Más compatible, Español IA
+  - Botón "Analizar" junto a la URL
+  - Miniatura cargada automáticamente tras el análisis
   - Selector de idioma (combobox) visible en la barra superior
-  - Vista previa: abre video en VLC/reproductor del sistema, con
-    fallback al navegador
-  - Diálogos de actualización modernos (PharosDialog, sin icono tkinter)
   - 5 idiomas: es, en, pt, fr, de
 """
 
@@ -20,13 +24,16 @@ import webbrowser
 from tkinter import filedialog, ttk
 from typing import Optional
 
+from pharos.analyzer import VideoAnalyzer
 from pharos.constants import COLORS as C, QUALITY_FLAGS, VERSION
 from pharos.downloader import Downloader
 from pharos.i18n import LANGUAGE_DISPLAY, LANGUAGE_NAMES, Translator
+from pharos.models import VideoInfo
 from pharos.settings import SettingsManager
 from pharos.updater import Updater
 from pharos.ui.dialog import ask_yes_no, show_info, show_warning
 from pharos.ui.dropdown import DropdownButton
+from pharos.ui.format_panel import FormatPanel
 from pharos.ui.log_window import LogWindow
 from pharos.ui.settings_window import SettingsWindow
 from pharos.ui.styles import ThemeManager
@@ -67,6 +74,7 @@ class App:
         self._t          = translator
         self._log_win: Optional[LogWindow] = None
         self._is_fullscreen = False
+        self._current_video_info: Optional[VideoInfo] = None
 
         self._save_dir = tk.StringVar(
             value=os.path.join(os.path.expanduser("~"), "Downloads")
@@ -79,6 +87,11 @@ class App:
         self._downloader = Downloader(
             on_line=self._on_download_line,
             on_done=self._on_download_done,
+        )
+        self._analyzer = VideoAnalyzer(
+            on_info=self._on_analysis_done,
+            on_error=self._on_analysis_error,
+            on_progress=self._on_analysis_progress,
         )
         self._updater = Updater(
             on_update_found=self._on_update_found,
@@ -171,7 +184,8 @@ class App:
         body = tk.Frame(self._root, bg=C["bg"])
         body.pack(fill="both", expand=True, padx=20, pady=16)
         self._build_link_row(body)
-        self._build_quality_row(body)
+        self._build_format_panel(body)
+        self._build_save_row(body)
         self._build_preview_panel(body)
         self._build_progress(body)
         self._build_action_row(body)
@@ -185,7 +199,8 @@ class App:
         self._lbl_link.pack(anchor="w")
 
         frame = tk.Frame(parent, bg=C["border"])
-        frame.pack(fill="x", pady=(4, 14))
+        frame.pack(fill="x", pady=(4, 8))
+
         self._entry_url = tk.Entry(
             frame,
             bg=C["surface2"], fg=C["text"],
@@ -193,38 +208,43 @@ class App:
             relief="flat", bd=8,
             font=("Segoe UI", 11),
         )
-        self._entry_url.pack(fill="x")
+        self._entry_url.pack(side="left", fill="x", expand=True)
 
-    def _build_quality_row(self, parent: tk.Frame) -> None:
+        # Botón "Analizar" junto al campo URL
+        self._btn_analyze = tk.Button(
+            frame,
+            text=self._t("analyze"),
+            bg=C["accent"], fg="white",
+            activebackground=C["accent_hover"], activeforeground="white",
+            relief="flat", bd=0, padx=14, pady=0,
+            font=("Segoe UI", 10, "bold"),
+            cursor="hand2",
+            command=self._start_analyze,
+        )
+        self._btn_analyze.pack(side="left", fill="y", padx=(4, 0))
+
+    def _build_format_panel(self, parent: tk.Frame) -> None:
+        """Panel de selección de formato avanzado (Fase 1)."""
+        self._format_panel = FormatPanel(
+            parent,
+            translator=self._t,
+        )
+        self._format_panel.pack(fill="x", pady=(0, 10))
+        self._format_panel.show_idle()
+
+    def _build_save_row(self, parent: tk.Frame) -> None:
+        """Fila de selección de carpeta de guardado."""
         row = tk.Frame(parent, bg=C["bg"])
-        row.pack(fill="x", pady=(0, 12))
+        row.pack(fill="x", pady=(0, 10))
 
-        col_q = tk.Frame(row, bg=C["bg"])
-        col_q.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self._lbl_quality = tk.Label(
-            col_q, text=self._t("quality"),
-            bg=C["bg"], fg=C["text_dim"],
-            font=("Segoe UI", 9, "bold"),
-        )
-        self._lbl_quality.pack(anchor="w")
-        self._cb_quality = ttk.Combobox(
-            col_q,
-            values=[self._t(k) for k in QUALITY_FLAGS],
-            state="readonly", width=20,
-            font=("Segoe UI", 10),
-        )
-        self._cb_quality.current(0)
-        self._cb_quality.pack(anchor="w", pady=(4, 0))
-
-        col_s = tk.Frame(row, bg=C["bg"])
-        col_s.pack(side="left", fill="x", expand=True)
         self._lbl_save = tk.Label(
-            col_s, text=self._t("save_in"),
+            row, text=self._t("save_in"),
             bg=C["bg"], fg=C["text_dim"],
             font=("Segoe UI", 9, "bold"),
         )
         self._lbl_save.pack(anchor="w")
-        row_save = tk.Frame(col_s, bg=C["bg"])
+
+        row_save = tk.Frame(row, bg=C["bg"])
         row_save.pack(fill="x", pady=(4, 0))
         tk.Entry(
             row_save, textvariable=self._save_dir,
@@ -498,6 +518,62 @@ class App:
             fill=C["text_dim"], font=("Segoe UI", 9),
         )
 
+    # ── Análisis de video ─────────────────────────────────────────────────────
+    def _start_analyze(self) -> None:
+        """Dispara el análisis con yt-dlp -J en background."""
+        url = self._entry_url.get().strip()
+        if not url:
+            show_warning(
+                self._root,
+                self._t("no_link_title"),
+                self._t("no_link"),
+                ok_label=self._t("ok"),
+            )
+            return
+        self._open_logs()
+        self._btn_analyze.configure(state="disabled", bg=C["accent_dark"])
+        self._progress.start(10)
+        self._format_panel.show_analyzing()
+        self._status.set(self._t("analyzing"))
+        self._analyzer.analyze(url)
+
+    def _on_analysis_done(self, info: VideoInfo) -> None:
+        """Callback: análisis completado exitosamente."""
+        self._current_video_info = info
+
+        def _update():
+            self._format_panel.load(info)
+            self._btn_analyze.configure(state="normal", bg=C["accent"])
+            self._progress.stop()
+            self._status.set(self._t("analysis_ready"))
+            # Actualizar preview con los datos del análisis
+            self._lbl_title.configure(text=info.title[:80])
+            meta = f"📺 {info.uploader}  •  ⏱ {info.duration_str}" if info.uploader else info.duration_str
+            self._lbl_meta.configure(text=meta)
+            # Cargar miniatura en background
+            if info.thumbnail:
+                threading.Thread(
+                    target=self._load_thumbnail,
+                    args=(info.thumbnail,),
+                    daemon=True,
+                ).start()
+
+        self._root.after(0, _update)
+
+    def _on_analysis_error(self, error: str) -> None:
+        """Callback: error en el análisis."""
+        def _update():
+            self._format_panel.show_error(error)
+            self._btn_analyze.configure(state="normal", bg=C["accent"])
+            self._progress.stop()
+            self._status.set(f"❌ {error[:100]}")
+        self._root.after(0, _update)
+
+    def _on_analysis_progress(self, msg: str) -> None:
+        """Callback: mensajes intermedios del analyzer → al log."""
+        if self._log_win and self._log_win.winfo_exists():
+            self._root.after(0, self._log_win.write, msg)
+
     # ── Descarga ──────────────────────────────────────────────────────────────
     def _start_download(self) -> None:
         url = self._entry_url.get().strip()
@@ -512,8 +588,16 @@ class App:
         self._open_logs()
         self._btn_download.configure(state="disabled", bg=C["accent_dark"])
         self._progress.start(12)
-        q_key = list(QUALITY_FLAGS.keys())[self._cb_quality.current()]
-        self._downloader.start(url=url, quality_key=q_key, save_dir=self._save_dir.get())
+
+        # Obtener args desde el FormatPanel (si hay análisis) o calidad simple
+        extra_args = self._format_panel.get_download_args()
+
+        # Construir el comando directamente con los args del panel
+        self._downloader.start_with_args(
+            url=url,
+            extra_args=extra_args,
+            save_dir=self._save_dir.get(),
+        )
 
     def _on_download_line(self, text: str) -> None:
         line = text.strip().split("\n")[0]
@@ -585,9 +669,9 @@ class App:
         """Re-aplica todos los textos traducibles de la UI."""
         self._root.title(self._t("title"))
         self._lbl_link.configure(text=self._t("video_link"))
-        self._lbl_quality.configure(text=self._t("quality"))
         self._lbl_save.configure(text=self._t("save_in"))
         self._btn_choose.configure(text=self._t("choose"))
+        self._btn_analyze.configure(text=self._t("analyze"))
         self._btn_play.configure(text=self._t("open_in_player"))
         self._btn_browser.configure(text=self._t("open_in_browser"))
         self._btn_download.configure(text=self._t("download"))
@@ -596,11 +680,9 @@ class App:
         self._btn_settings.configure(text=self._t("settings"))
         self._btn_fullscreen.configure(text=self._t("fullscreen"))
         self._btn_minimize.configure(text=self._t("minimize"))
-        # Combobox calidades
-        idx = self._cb_quality.current()
-        self._cb_quality["values"] = [self._t(k) for k in QUALITY_FLAGS]
-        self._cb_quality.current(idx)
-        # Combobox idioma: actualizar label pero no cambiar selección
+        # FormatPanel
+        self._format_panel.refresh_language(self._t)
+        # Combobox idioma de la topbar: actualizar label pero no cambiar selección
         from pharos.i18n import LANGUAGE_DISPLAY
         self._cb_lang["values"] = list(LANGUAGE_NAMES.keys())
         self._lang_var.set(LANGUAGE_DISPLAY.get(self._t.language, "Español"))
