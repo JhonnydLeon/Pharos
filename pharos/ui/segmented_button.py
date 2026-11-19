@@ -21,6 +21,9 @@ class SegmentedButton(tk.Frame):
     Fila de botones planos del estilo Pharos donde exactamente uno
     está "activo" (rojo). Al hacer clic en uno, los demás se desactivan.
 
+    IMPORTANTE: No usar self._options (nombre reservado por tkinter BaseWidget).
+                Se usa self._labels en su lugar.
+
     Uso:
         seg = SegmentedButton(parent, options=["A", "B", "C"], on_change=callback)
         seg.pack(...)
@@ -33,12 +36,12 @@ class SegmentedButton(tk.Frame):
         parent,
         options:   list[str],
         on_change: Optional[Callable[[int], None]] = None,
-        font=(("Segoe UI", 10)),
+        font=("Segoe UI", 10),
         padx: int = 16,
         pady: int = 8,
     ) -> None:
         super().__init__(parent, bg=C["bg"], bd=0, highlightthickness=0)
-        self._options   = options
+        self._labels    = list(options)   # ← NO usar _options (reservado por tkinter)
         self._on_change = on_change
         self._font      = font
         self._padx      = padx
@@ -54,23 +57,22 @@ class SegmentedButton(tk.Frame):
 
     def set_index(self, idx: int) -> None:
         """Activa el botón en la posición idx (sin disparar on_change)."""
-        idx = max(0, min(idx, len(self._options) - 1))
+        idx = max(0, min(idx, len(self._labels) - 1))
         self._active = idx
         self._refresh_colors()
 
     def set_options(self, options: list[str], active: int = 0) -> None:
         """Reemplaza las opciones y reconstruye los botones."""
-        # Destruir botones anteriores
         for btn in self._buttons:
             btn.destroy()
         self._buttons.clear()
-        self._options = options
-        self._active  = max(0, min(active, len(options) - 1))
+        self._labels = list(options)
+        self._active = max(0, min(active, len(self._labels) - 1))
         self._build()
 
     # ── Privado ───────────────────────────────────────────────────────────────
     def _build(self) -> None:
-        for i, label in enumerate(self._options):
+        for i, label in enumerate(self._labels):
             btn = tk.Button(
                 self,
                 text=label,
@@ -95,12 +97,15 @@ class SegmentedButton(tk.Frame):
     def _refresh_colors(self) -> None:
         for i, btn in enumerate(self._buttons):
             if i == self._active:
-                btn.configure(bg=C["accent"], fg="white",
-                              activebackground=C["accent_hover"])
+                btn.configure(
+                    bg=C["accent"], fg="white",
+                    activebackground=C["accent_hover"],
+                )
             else:
-                btn.configure(bg=C["surface2"], fg=C["text_dim"],
-                              activebackground=C["surface"])
-                # Hover sutil para los inactivos
+                btn.configure(
+                    bg=C["surface2"], fg=C["text_dim"],
+                    activebackground=C["surface"],
+                )
                 btn.bind("<Enter>", lambda e, b=btn: b.configure(
                     bg=C["surface"], fg=C["text"]))
                 btn.bind("<Leave>", lambda e, b=btn: b.configure(
