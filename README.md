@@ -123,6 +123,8 @@ python main.py
 ---
 
 ## 📦 Crear ejecutable .exe
+Los siguientes comandos tienen que ejecutarse dentro de la carpeta que se crea al clonarse el repositorio
+la ruta del directorio o carpeta es: `\Pharos`
 
 ```bash
 pip install pyinstaller
