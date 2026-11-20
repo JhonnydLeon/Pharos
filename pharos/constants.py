@@ -11,7 +11,7 @@ Principio SOLID aplicado:
 
 # ── Versión y GitHub ─────────────────────────────────────────────────────────
 APP_NAME    = "Pharos"
-VERSION     = "1.0.0"
+VERSION     = "1.2.0"
 GITHUB_REPO = "JhonnydLeon/Pharos"           # ← tu usuario/repo en GitHub
 GITHUB_API  = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
